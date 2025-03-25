@@ -1,1 +1,1 @@
-Feature version
+This is a conflicting change from feature/base branch
