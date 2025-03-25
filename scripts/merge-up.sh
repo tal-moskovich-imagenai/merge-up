@@ -105,14 +105,29 @@ perform_merges() {
         if [ "$branch" != "master" ] && grep -q "^$branch$" /tmp/selected_branches; then
             echo -e "${YELLOW}Merging $previous_branch into $branch...${NC}"
             git checkout $branch
-            if git merge $previous_branch; then
-                echo -e "${GREEN}Successfully merged $previous_branch into $branch${NC}"
-                previous_branch=$branch
-            else
+            
+            # Attempt the merge
+            git merge $previous_branch
+            
+            # Check if merge resulted in conflicts
+            if [ $? -ne 0 ]; then
                 echo -e "${RED}Merge failed for $branch${NC}"
-                echo -e "${YELLOW}Please resolve conflicts and try again${NC}"
+                
+                # Check git status for conflicts
+                if git status | grep -q "both modified:"; then
+                    echo -e "${RED}Merge conflicts detected in the following files:${NC}"
+                    git status | grep "both modified:"
+                    echo -e "\n${YELLOW}Please resolve the conflicts and try again.${NC}"
+                    echo -e "${YELLOW}You can use 'git status' to see the conflicting files.${NC}"
+                else
+                    echo -e "${YELLOW}Merge failed but no conflicts found. Please check git status.${NC}"
+                fi
+                
                 has_errors=true
                 break
+            else
+                echo -e "${GREEN}Successfully merged $previous_branch into $branch${NC}"
+                previous_branch=$branch
             fi
         fi
     done < /tmp/branch_order
