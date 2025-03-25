@@ -55,8 +55,8 @@ find_branches() {
     # Create temporary directory for our files
     mkdir -p /tmp/git-merge-up
 
-    # Start with current branch
-    echo "$CURRENT_BRANCH" > /tmp/git-merge-up/branch_order
+    # Start with base branch
+    echo "$BASE_BRANCH" > /tmp/git-merge-up/branch_order
 
     # Function to check if a branch is based on another branch
     is_based_on() {
@@ -88,15 +88,15 @@ find_branches() {
         fi
     done < /tmp/git-merge-up/all_branches
 
-    # Sort intermediate branches by their distance from base
+    # Sort intermediate branches by their distance from base (in reverse order)
     if [ -f /tmp/git-merge-up/intermediate_branches ]; then
         cat /tmp/git-merge-up/intermediate_branches | while read branch; do
             echo "$(git rev-list --count "$BASE_BRANCH".."$branch") $branch"
-        done | sort -n | cut -d' ' -f2 >> /tmp/git-merge-up/branch_order
+        done | sort -rn | cut -d' ' -f2 >> /tmp/git-merge-up/branch_order
     fi
 
-    # Add base branch at the end (only once)
-    echo "$BASE_BRANCH" >> /tmp/git-merge-up/branch_order
+    # Add current branch at the end
+    echo "$CURRENT_BRANCH" >> /tmp/git-merge-up/branch_order
 
     # Create initial selection file
     cp /tmp/git-merge-up/branch_order /tmp/git-merge-up/selected_branches
@@ -151,13 +151,15 @@ deselect_all() {
 
 # Function to perform merges
 perform_merges() {
-    local ORIGINAL_BRANCH=$CURRENT_BRANCH
+    local ORIGINAL_BRANCH="$CURRENT_BRANCH"
     local has_errors=false
-    local BASE_BRANCH=$(find_base_branch)
-    local previous_branch=$BASE_BRANCH
+    local previous_branch=""
+
+    # Read the first selected branch to start with
+    previous_branch=$(head -n1 /tmp/git-merge-up/selected_branches)
 
     while IFS= read -r branch; do
-        if [ "$branch" != "$BASE_BRANCH" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ] && grep -Fxq "$branch" /tmp/git-merge-up/selected_branches; then
+        if [ "$branch" != "$previous_branch" ] && grep -Fxq "$branch" /tmp/git-merge-up/selected_branches; then
             echo -e "${YELLOW}Merging $previous_branch into $branch...${NC}"
             git checkout "$branch"
 
@@ -182,7 +184,7 @@ perform_merges() {
                 break
             else
                 echo -e "${GREEN}Successfully merged $previous_branch into $branch${NC}"
-                previous_branch=$branch
+                previous_branch="$branch"
             fi
         fi
     done < /tmp/git-merge-up/branch_order
@@ -221,9 +223,9 @@ while true; do
             # Check if any branches are selected
             if [ -s /tmp/git-merge-up/selected_branches ]; then
                 echo -e "${YELLOW}The following merges will be performed:${NC}"
-                local previous_branch=$BASE_BRANCH
+                local previous_branch=$(head -n1 /tmp/git-merge-up/selected_branches)
                 while IFS= read -r branch; do
-                    if [ "$branch" != "$BASE_BRANCH" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ] && grep -Fxq "$branch" /tmp/git-merge-up/selected_branches; then
+                    if [ "$branch" != "$previous_branch" ] && grep -Fxq "$branch" /tmp/git-merge-up/selected_branches; then
                         echo -e "${GREEN}$previous_branch -> $branch${NC}"
                         previous_branch=$branch
                     fi
